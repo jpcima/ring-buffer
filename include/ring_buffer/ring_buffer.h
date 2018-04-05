@@ -70,9 +70,8 @@ private:
     template <class> friend class Soft_Ring_Buffer_Ex;
     bool getbytes_(void *data, size_t len);
     bool peekbytes_(void *data, size_t len) const;
-    bool putbytes_(const void *data, size_t len);
     bool getbytes_ex_(void *data, size_t len, bool advp);
-    bool putbytes_ex_(const void *data, size_t len);
+    bool putbytes_(const void *data, size_t len);
 };
 
 //------------------------------------------------------------------------------

@@ -7,6 +7,12 @@
 #include <algorithm>
 #include <cassert>
 
+#if defined(__cpp_if_constexpr)
+#    define if_constexpr if constexpr
+#else
+#    define if_constexpr if
+#endif
+
 template <bool Atomic>
 Ring_Buffer_Ex<Atomic>::Ring_Buffer_Ex(size_t capacity)
     : cap_(capacity + 1),
@@ -42,7 +48,6 @@ size_t Ring_Buffer_Ex<Atomic>::size_free() const
 template <bool Atomic>
 bool Ring_Buffer_Ex<Atomic>::getbytes_(void *data, size_t len)
 {
-    std::atomic_thread_fence(std::memory_order_acquire);
     return getbytes_ex_(data, len, true);
 }
 
@@ -50,16 +55,7 @@ template <bool Atomic>
 bool Ring_Buffer_Ex<Atomic>::peekbytes_(void *data, size_t len) const
 {
     auto *ncthis = const_cast<Ring_Buffer_Ex<Atomic> *>(this);
-    std::atomic_thread_fence(std::memory_order_acquire);
     return ncthis->getbytes_ex_(data, len, false);
-}
-
-template <bool Atomic>
-bool Ring_Buffer_Ex<Atomic>::putbytes_(const void *data, size_t len)
-{
-    bool b = putbytes_ex_(data, len);
-    std::atomic_thread_fence(std::memory_order_release);
-    return b;
 }
 
 template <bool Atomic>
@@ -74,6 +70,8 @@ bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 
     if (data) {
         const size_t taillen = std::min(len, cap - rp);
+        if_constexpr (Atomic)
+            std::atomic_thread_fence(std::memory_order_acquire);
         std::copy_n(&src[rp], taillen, dst);
         std::copy_n(src, len - taillen, dst + taillen);
     }
@@ -84,7 +82,7 @@ bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 }
 
 template <bool Atomic>
-bool Ring_Buffer_Ex<Atomic>::putbytes_ex_(const void *data, size_t len)
+bool Ring_Buffer_Ex<Atomic>::putbytes_(const void *data, size_t len)
 {
     if (size_free() < len)
         return false;
@@ -96,6 +94,8 @@ bool Ring_Buffer_Ex<Atomic>::putbytes_ex_(const void *data, size_t len)
     const size_t taillen = std::min(len, cap - wp);
     std::copy_n(src, taillen, &dst[wp]);
     std::copy_n(src + taillen, len - taillen, dst);
+    if_constexpr (Atomic)
+        std::atomic_thread_fence(std::memory_order_release);
 
     wp_ = (wp + len < cap) ? (wp + len) : (wp + len - cap);
     return true;
@@ -116,7 +116,7 @@ template <class Mutex>
 bool Soft_Ring_Buffer_Ex<Mutex>::discard(size_t len)
 {
     std::shared_lock<Mutex> lock(shmutex_);
-    return rb_.getbytes_ex_(nullptr, len, true);
+    return rb_.discard(len);
 }
 
 template <class Mutex>
@@ -130,7 +130,7 @@ template <class Mutex>
 bool Soft_Ring_Buffer_Ex<Mutex>::getbytes_(void *data, size_t len)
 {
     std::shared_lock<Mutex> lock(shmutex_);
-    return rb_.getbytes_ex_(data, len, true);
+    return rb_.getbytes_(data, len);
 }
 
 template <class Mutex>
@@ -138,7 +138,7 @@ bool Soft_Ring_Buffer_Ex<Mutex>::peekbytes_(void *data, size_t len) const
 {
     std::shared_lock<Mutex> lock(shmutex_);
     auto &ncrb = const_cast<Ring_Buffer_Ex<false> &>(rb_);
-    return ncrb.getbytes_ex_(data, len, false);
+    return ncrb.peekbytes_(data, len);
 }
 
 template <class Mutex>
@@ -149,12 +149,12 @@ bool Soft_Ring_Buffer_Ex<Mutex>::putbytes_(const void *data, size_t len)
     size_t atleastcap = size_used() + len;
     if (atleastcap <= oldcap) {
         std::shared_lock<Mutex> lock(shmutex_);
-        good = rb_.putbytes_ex_(data, len);
+        good = rb_.putbytes_(data, len);
     }
     else {
         std::unique_lock<Mutex> lock(shmutex_);
         grow_(atleastcap);
-        good = rb_.putbytes_ex_(data, len);
+        good = rb_.putbytes_(data, len);
     }
     assert(good);
     return true;
