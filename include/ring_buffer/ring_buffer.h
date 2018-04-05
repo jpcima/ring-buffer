@@ -10,6 +10,10 @@
 #include <cstdint>
 #include <cstddef>
 
+static_assert(
+    std::atomic<size_t>::is_always_lock_free, "atomic<size_t> must be lock free");
+
+//------------------------------------------------------------------------------
 template <class RB>
 class Basic_Ring_Buffer {
 public:
