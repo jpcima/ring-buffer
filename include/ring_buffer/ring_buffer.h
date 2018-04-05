@@ -10,8 +10,10 @@
 #include <cstdint>
 #include <cstddef>
 
+#if defined(__cpp_lib_atomic_is_always_lock_free)
 static_assert(
     std::atomic<size_t>::is_always_lock_free, "atomic<size_t> must be lock free");
+#endif
 
 //------------------------------------------------------------------------------
 template <class RB>
