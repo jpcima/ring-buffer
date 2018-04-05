@@ -4,9 +4,9 @@
 //          http://www.boost.org/LICENSE_1_0.txt)
 
 #include "ring_buffer/ring_buffer.h"
-#include <type_traits>
 
-inline size_t Ring_Buffer::capacity() const
+template <bool Atomic>
+inline size_t Ring_Buffer_Ex<Atomic>::capacity() const
 {
     return cap_ - 1;
 }

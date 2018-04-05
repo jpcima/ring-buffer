@@ -7,54 +7,66 @@
 #include <algorithm>
 #include <cassert>
 
-Ring_Buffer::Ring_Buffer(size_t capacity)
+template class Ring_Buffer_Ex<true>;
+template class Ring_Buffer_Ex<false>;
+
+template <bool Atomic>
+Ring_Buffer_Ex<Atomic>::Ring_Buffer_Ex(size_t capacity)
     : cap_(capacity + 1),
       rbdata_(new uint8_t[capacity + 1])
 {
 }
 
-Ring_Buffer::~Ring_Buffer()
+template <bool Atomic>
+Ring_Buffer_Ex<Atomic>::~Ring_Buffer_Ex()
 {
 }
 
-size_t Ring_Buffer::size_used() const
+template <bool Atomic>
+size_t Ring_Buffer_Ex<Atomic>::size_used() const
 {
     const size_t rp = rp_, wp = wp_, cap = cap_;
     return wp + ((wp < rp) ? cap : 0) - rp;
 }
 
-bool Ring_Buffer::discard(size_t len)
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::discard(size_t len)
 {
     return getbytes_ex_(nullptr, len, true);
 }
 
-size_t Ring_Buffer::size_free() const
+template <bool Atomic>
+size_t Ring_Buffer_Ex<Atomic>::size_free() const
 {
     const size_t rp = rp_, wp = wp_, cap = cap_;
     return rp + ((rp <= wp) ? cap : 0) - wp - 1;
 }
 
-bool Ring_Buffer::getbytes_(void *data, size_t len)
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::getbytes_(void *data, size_t len)
 {
     std::atomic_thread_fence(std::memory_order_acquire);
     return getbytes_ex_(data, len, true);
 }
 
-bool Ring_Buffer::peekbytes_(void *data, size_t len) const
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::peekbytes_(void *data, size_t len) const
 {
-    Ring_Buffer *ncthis = const_cast<Ring_Buffer *>(this);
+    auto *ncthis = const_cast<Ring_Buffer_Ex<Atomic> *>(this);
     std::atomic_thread_fence(std::memory_order_acquire);
     return ncthis->getbytes_ex_(data, len, false);
 }
 
-bool Ring_Buffer::putbytes_(const void *data, size_t len)
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::putbytes_(const void *data, size_t len)
 {
     bool b = putbytes_ex_(data, len);
     std::atomic_thread_fence(std::memory_order_release);
     return b;
 }
 
-bool Ring_Buffer::getbytes_ex_(void *data, size_t len, bool advp)
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 {
     if (size_used() < len)
         return false;
@@ -74,7 +86,8 @@ bool Ring_Buffer::getbytes_ex_(void *data, size_t len, bool advp)
     return true;
 }
 
-bool Ring_Buffer::putbytes_ex_(const void *data, size_t len)
+template <bool Atomic>
+bool Ring_Buffer_Ex<Atomic>::putbytes_ex_(const void *data, size_t len)
 {
     if (size_free() < len)
         return false;
@@ -119,7 +132,7 @@ bool Soft_Ring_Buffer::getbytes_(void *data, size_t len)
 bool Soft_Ring_Buffer::peekbytes_(void *data, size_t len) const
 {
     std::shared_lock<mutex_type> lock(shmutex_);
-    Ring_Buffer &ncrb = const_cast<Ring_Buffer &>(rb_);
+    auto &ncrb = const_cast<Ring_Buffer_Ex<false> &>(rb_);
     return ncrb.getbytes_ex_(data, len, false);
 }
 

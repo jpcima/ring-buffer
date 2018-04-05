@@ -6,6 +6,7 @@
 #pragma once
 #include <memory>
 #include <atomic>
+#include <type_traits>
 #include <cstdint>
 #include <cstddef>
 
@@ -23,12 +24,17 @@ public:
 };
 
 //------------------------------------------------------------------------------
-class Ring_Buffer final :
+template <bool> class Ring_Buffer_Ex;
+typedef Ring_Buffer_Ex<true> Ring_Buffer;
+
+//------------------------------------------------------------------------------
+template <bool Atomic>
+class Ring_Buffer_Ex final :
     private Basic_Ring_Buffer<Ring_Buffer> {
 public:
     // initialization and cleanup
-    explicit Ring_Buffer(size_t capacity);
-    ~Ring_Buffer();
+    explicit Ring_Buffer_Ex(size_t capacity);
+    ~Ring_Buffer_Ex();
     // attributes
     size_t capacity() const;
     // read operations
@@ -42,7 +48,7 @@ public:
 
 private:
     size_t cap_{0};
-    std::atomic<size_t> rp_{0}, wp_{0};
+    std::conditional_t<Atomic, std::atomic<size_t>, size_t> rp_{0}, wp_{0};
     std::unique_ptr<uint8_t[]> rbdata_ {};
     friend class Basic_Ring_Buffer;
     friend class Soft_Ring_Buffer;
@@ -84,7 +90,7 @@ private:
 #endif
 
 private:
-    Ring_Buffer rb_;
+    Ring_Buffer_Ex<false> rb_;
     mutable mutex_type shmutex_;
     friend class Basic_Ring_Buffer;
     bool getbytes_(void *data, size_t len);
