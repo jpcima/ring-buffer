@@ -1,7 +1,7 @@
 # ring-buffer
 This package provides ring buffer classes for use with C++17.
 
-Backward compatibility with the C++14 standard is provided if Boost libraries are available.
+C++17 features are used if available, and backward compatibility is implemented up to C++14.
 
 ## Description
 

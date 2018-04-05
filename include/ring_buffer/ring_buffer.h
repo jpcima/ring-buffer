@@ -6,6 +6,7 @@
 #pragma once
 #include <memory>
 #include <atomic>
+#include <shared_mutex>
 #include <type_traits>
 #include <cstdint>
 #include <cstddef>
@@ -13,6 +14,17 @@
 #if defined(__cpp_lib_atomic_is_always_lock_free)
 static_assert(
     std::atomic<size_t>::is_always_lock_free, "atomic<size_t> must be lock free");
+#endif
+
+//------------------------------------------------------------------------------
+template <bool> class Ring_Buffer_Ex;
+typedef Ring_Buffer_Ex<true> Ring_Buffer;
+
+template <class> class Soft_Ring_Buffer_Ex;
+#if defined(__cpp_lib_shared_mutex)
+typedef Soft_Ring_Buffer_Ex<std::shared_mutex> Soft_Ring_Buffer;
+#else
+typedef Soft_Ring_Buffer_Ex<std::shared_timed_mutex> Soft_Ring_Buffer;
 #endif
 
 //------------------------------------------------------------------------------
@@ -28,10 +40,6 @@ public:
     template <class T> bool put(const T &x);
     template <class T> bool put(const T *x, size_t n);
 };
-
-//------------------------------------------------------------------------------
-template <bool> class Ring_Buffer_Ex;
-typedef Ring_Buffer_Ex<true> Ring_Buffer;
 
 //------------------------------------------------------------------------------
 template <bool Atomic>
@@ -59,7 +67,7 @@ private:
     std::conditional_t<Atomic, std::atomic<size_t>, size_t> rp_{0}, wp_{0};
     std::unique_ptr<uint8_t[]> rbdata_ {};
     friend Base;
-    friend class Soft_Ring_Buffer;
+    template <class> friend class Soft_Ring_Buffer_Ex;
     bool getbytes_(void *data, size_t len);
     bool peekbytes_(void *data, size_t len) const;
     bool putbytes_(const void *data, size_t len);
@@ -68,19 +76,15 @@ private:
 };
 
 //------------------------------------------------------------------------------
-#include <shared_mutex>
-#if defined(RING_BUFFER_NO_STD_SHARED_MUTEX)
-#    include <boost/thread/shared_mutex.hpp>
-#endif
-
-class Soft_Ring_Buffer final :
-    private Basic_Ring_Buffer<Soft_Ring_Buffer> {
+template <class Mutex>
+class Soft_Ring_Buffer_Ex final :
+    private Basic_Ring_Buffer<Soft_Ring_Buffer_Ex<Mutex>> {
 private:
-    typedef Basic_Ring_Buffer<Soft_Ring_Buffer> Base;
+    typedef Basic_Ring_Buffer<Soft_Ring_Buffer_Ex<Mutex>> Base;
 public:
     // initialization and cleanup
-    explicit Soft_Ring_Buffer(size_t capacity);
-    ~Soft_Ring_Buffer();
+    explicit Soft_Ring_Buffer_Ex(size_t capacity);
+    ~Soft_Ring_Buffer_Ex();
     // attributes
     size_t capacity() const;
     // read operations
@@ -93,15 +97,8 @@ public:
     using Base::put;
 
 private:
-#if !defined(RING_BUFFER_NO_STD_SHARED_MUTEX)
-    typedef std::shared_mutex mutex_type;
-#else
-    typedef boost::shared_mutex mutex_type;
-#endif
-
-private:
     Ring_Buffer_Ex<false> rb_;
-    mutable mutex_type shmutex_;
+    mutable Mutex shmutex_;
     friend Base;
     bool getbytes_(void *data, size_t len);
     bool peekbytes_(void *data, size_t len) const;

@@ -7,9 +7,6 @@
 #include <algorithm>
 #include <cassert>
 
-template class Ring_Buffer_Ex<true>;
-template class Ring_Buffer_Ex<false>;
-
 template <bool Atomic>
 Ring_Buffer_Ex<Atomic>::Ring_Buffer_Ex(size_t capacity)
     : cap_(capacity + 1),
@@ -104,49 +101,58 @@ bool Ring_Buffer_Ex<Atomic>::putbytes_ex_(const void *data, size_t len)
     return true;
 }
 
+template class Ring_Buffer_Ex<true>;
+template class Ring_Buffer_Ex<false>;
+
 //------------------------------------------------------------------------------
-size_t Soft_Ring_Buffer::size_used() const
+template <class Mutex>
+size_t Soft_Ring_Buffer_Ex<Mutex>::size_used() const
 {
-    std::shared_lock<mutex_type> lock(shmutex_);
+    std::shared_lock<Mutex> lock(shmutex_);
     return rb_.size_used();
 }
 
-bool Soft_Ring_Buffer::discard(size_t len)
+template <class Mutex>
+bool Soft_Ring_Buffer_Ex<Mutex>::discard(size_t len)
 {
-    std::shared_lock<mutex_type> lock(shmutex_);
+    std::shared_lock<Mutex> lock(shmutex_);
     return rb_.getbytes_ex_(nullptr, len, true);
 }
 
-size_t Soft_Ring_Buffer::size_free() const
+template <class Mutex>
+size_t Soft_Ring_Buffer_Ex<Mutex>::size_free() const
 {
-    std::shared_lock<mutex_type> lock(shmutex_);
+    std::shared_lock<Mutex> lock(shmutex_);
     return rb_.size_free();
 }
 
-bool Soft_Ring_Buffer::getbytes_(void *data, size_t len)
+template <class Mutex>
+bool Soft_Ring_Buffer_Ex<Mutex>::getbytes_(void *data, size_t len)
 {
-    std::shared_lock<mutex_type> lock(shmutex_);
+    std::shared_lock<Mutex> lock(shmutex_);
     return rb_.getbytes_ex_(data, len, true);
 }
 
-bool Soft_Ring_Buffer::peekbytes_(void *data, size_t len) const
+template <class Mutex>
+bool Soft_Ring_Buffer_Ex<Mutex>::peekbytes_(void *data, size_t len) const
 {
-    std::shared_lock<mutex_type> lock(shmutex_);
+    std::shared_lock<Mutex> lock(shmutex_);
     auto &ncrb = const_cast<Ring_Buffer_Ex<false> &>(rb_);
     return ncrb.getbytes_ex_(data, len, false);
 }
 
-bool Soft_Ring_Buffer::putbytes_(const void *data, size_t len)
+template <class Mutex>
+bool Soft_Ring_Buffer_Ex<Mutex>::putbytes_(const void *data, size_t len)
 {
     bool good;
     size_t oldcap = rb_.capacity();
     size_t atleastcap = size_used() + len;
     if (atleastcap <= oldcap) {
-        std::shared_lock<mutex_type> lock(shmutex_);
+        std::shared_lock<Mutex> lock(shmutex_);
         good = rb_.putbytes_ex_(data, len);
     }
     else {
-        std::unique_lock<mutex_type> lock(shmutex_);
+        std::unique_lock<Mutex> lock(shmutex_);
         grow_(atleastcap);
         good = rb_.putbytes_ex_(data, len);
     }
@@ -154,7 +160,8 @@ bool Soft_Ring_Buffer::putbytes_(const void *data, size_t len)
     return true;
 }
 
-void Soft_Ring_Buffer::grow_(size_t atleastcap)
+template <class Mutex>
+void Soft_Ring_Buffer_Ex<Mutex>::grow_(size_t atleastcap)
 {
     size_t oldcap = rb_.capacity();
     size_t newcap = (oldcap < 16) ? 16 : oldcap;
@@ -182,3 +189,8 @@ void Soft_Ring_Buffer::grow_(size_t atleastcap)
     rb_.wp_ = len;
     rb_.rbdata_ = std::move(newdata);
 }
+
+#if defined(__cpp_lib_shared_mutex)
+template class Soft_Ring_Buffer_Ex<std::shared_mutex>;
+#endif
+template class Soft_Ring_Buffer_Ex<std::shared_timed_mutex>;

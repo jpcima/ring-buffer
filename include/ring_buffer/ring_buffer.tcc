@@ -12,16 +12,19 @@ inline size_t Ring_Buffer_Ex<Atomic>::capacity() const
 }
 
 //------------------------------------------------------------------------------
-inline Soft_Ring_Buffer::Soft_Ring_Buffer(size_t capacity)
+template <class Mutex>
+inline Soft_Ring_Buffer_Ex<Mutex>::Soft_Ring_Buffer_Ex(size_t capacity)
     : rb_(capacity)
 {
 }
 
-inline Soft_Ring_Buffer::~Soft_Ring_Buffer()
+template <class Mutex>
+inline Soft_Ring_Buffer_Ex<Mutex>::~Soft_Ring_Buffer_Ex()
 {
 }
 
-inline size_t Soft_Ring_Buffer::capacity() const
+template <class Mutex>
+inline size_t Soft_Ring_Buffer_Ex<Mutex>::capacity() const
 {
     return rb_.capacity();
 }
