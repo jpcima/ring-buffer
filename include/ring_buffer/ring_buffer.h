@@ -47,9 +47,10 @@ private:
     friend class Basic_Ring_Buffer;
     friend class Soft_Ring_Buffer;
     bool getbytes_(void *data, size_t len);
-    bool getbytes_ex_(void *data, size_t len, bool advp);
     bool peekbytes_(void *data, size_t len) const;
     bool putbytes_(const void *data, size_t len);
+    bool getbytes_ex_(void *data, size_t len, bool advp);
+    bool putbytes_ex_(const void *data, size_t len);
 };
 
 //------------------------------------------------------------------------------

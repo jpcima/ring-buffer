@@ -36,7 +36,22 @@ size_t Ring_Buffer::size_free() const
 
 bool Ring_Buffer::getbytes_(void *data, size_t len)
 {
+    std::atomic_thread_fence(std::memory_order_acquire);
     return getbytes_ex_(data, len, true);
+}
+
+bool Ring_Buffer::peekbytes_(void *data, size_t len) const
+{
+    Ring_Buffer *ncthis = const_cast<Ring_Buffer *>(this);
+    std::atomic_thread_fence(std::memory_order_acquire);
+    return ncthis->getbytes_ex_(data, len, false);
+}
+
+bool Ring_Buffer::putbytes_(const void *data, size_t len)
+{
+    bool b = putbytes_ex_(data, len);
+    std::atomic_thread_fence(std::memory_order_release);
+    return b;
 }
 
 bool Ring_Buffer::getbytes_ex_(void *data, size_t len, bool advp)
@@ -50,7 +65,6 @@ bool Ring_Buffer::getbytes_ex_(void *data, size_t len, bool advp)
 
     if (data) {
         const size_t taillen = std::min(len, cap - rp);
-        std::atomic_thread_fence(std::memory_order_acquire);
         std::copy_n(&src[rp], taillen, dst);
         std::copy_n(src, len - taillen, dst + taillen);
     }
@@ -60,13 +74,7 @@ bool Ring_Buffer::getbytes_ex_(void *data, size_t len, bool advp)
     return true;
 }
 
-bool Ring_Buffer::peekbytes_(void *data, size_t len) const
-{
-    Ring_Buffer *ncthis = const_cast<Ring_Buffer *>(this);
-    return ncthis->getbytes_ex_(data, len, false);
-}
-
-bool Ring_Buffer::putbytes_(const void *data, size_t len)
+bool Ring_Buffer::putbytes_ex_(const void *data, size_t len)
 {
     if (size_free() < len)
         return false;
@@ -78,7 +86,6 @@ bool Ring_Buffer::putbytes_(const void *data, size_t len)
     const size_t taillen = std::min(len, cap - wp);
     std::copy_n(src, taillen, &dst[wp]);
     std::copy_n(src + taillen, len - taillen, dst);
-    std::atomic_thread_fence(std::memory_order_release);
 
     wp_ = (wp + len < cap) ? (wp + len) : (wp + len - cap);
     return true;
@@ -94,7 +101,7 @@ size_t Soft_Ring_Buffer::size_used() const
 bool Soft_Ring_Buffer::discard(size_t len)
 {
     std::shared_lock<mutex_type> lock(shmutex_);
-    return rb_.discard(len);
+    return rb_.getbytes_ex_(nullptr, len, true);
 }
 
 size_t Soft_Ring_Buffer::size_free() const
@@ -106,13 +113,14 @@ size_t Soft_Ring_Buffer::size_free() const
 bool Soft_Ring_Buffer::getbytes_(void *data, size_t len)
 {
     std::shared_lock<mutex_type> lock(shmutex_);
-    return rb_.getbytes_(data, len);
+    return rb_.getbytes_ex_(data, len, true);
 }
 
 bool Soft_Ring_Buffer::peekbytes_(void *data, size_t len) const
 {
     std::shared_lock<mutex_type> lock(shmutex_);
-    return rb_.peekbytes_(data, len);
+    Ring_Buffer &ncrb = const_cast<Ring_Buffer &>(rb_);
+    return ncrb.getbytes_ex_(data, len, false);
 }
 
 bool Soft_Ring_Buffer::putbytes_(const void *data, size_t len)
@@ -122,12 +130,12 @@ bool Soft_Ring_Buffer::putbytes_(const void *data, size_t len)
     size_t atleastcap = size_used() + len;
     if (atleastcap <= oldcap) {
         std::shared_lock<mutex_type> lock(shmutex_);
-        good = rb_.putbytes_(data, len);
+        good = rb_.putbytes_ex_(data, len);
     }
     else {
         std::unique_lock<mutex_type> lock(shmutex_);
         grow_(atleastcap);
-        good = rb_.putbytes_(data, len);
+        good = rb_.putbytes_ex_(data, len);
     }
     assert(good);
     return true;
