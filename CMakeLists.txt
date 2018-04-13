@@ -2,7 +2,15 @@ cmake_minimum_required(VERSION 3.5)
 
 project(ring_buffer LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD "17")
+if("cxx_std_17" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+  set(CMAKE_CXX_STANDARD "17")
+elseif("cxx_std_14" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+  set(CMAKE_CXX_STANDARD "14")
+else()
+  message(FATAL_ERROR "compiler does not support at least C++14")
+endif()
+
+message(STATUS "Building for C++ standard ${CMAKE_CXX_STANDARD}")
 
 find_package(Threads REQUIRED)
 
