@@ -7,7 +7,7 @@ if("cxx_std_17" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
 elseif("cxx_std_14" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
   set(CMAKE_CXX_STANDARD "14")
 else()
-  # this cmake may know have cxx_std features; try g++ flags
+  # this cmake may not have cxx_std features; try g++ flags
   include(CheckCXXCompilerFlag)
   if(CMAKE_COMPILER_IS_GNUCXX)
     CHECK_CXX_COMPILER_FLAG("-std=c++17" HAVE_CXXFLAG_STDCXX17)
