@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 project(ring_buffer LANGUAGES CXX)
 
-# argument RING_BUFFER_CXX_STANDARD: defines the C++ standard version to use
+set(RING_BUFFER_CXX_STANDARD "" CACHE STRING "the C++ standard version to use; if false, autodetect.")
 
 if(RING_BUFFER_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD "${RING_BUFFER_CXX_STANDARD}")
