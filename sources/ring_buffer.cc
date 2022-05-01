@@ -95,8 +95,11 @@ bool Ring_Buffer_Ex<Atomic>::peekbytes_(void *data, size_t len) const
 template <bool Atomic>
 bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 {
+    if (len == 0)
+        return true;
+
     const size_t rp = atomic_load_maybe(rp_, std::memory_order_relaxed);
-    const size_t wp = atomic_load_maybe(wp_, (data && len) ? std::memory_order_acquire : std::memory_order_relaxed);
+    const size_t wp = atomic_load_maybe(wp_, data ? std::memory_order_acquire : std::memory_order_relaxed);
     const size_t cap = cap_;
 
     // same as `size_used()` except `wp` memory order to synchronize data
@@ -108,13 +111,13 @@ bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
     const uint8_t *src = rbdata_.get();
     uint8_t *dst = (uint8_t *)data;
 
-    if (data && len) {
+    if (data) {
         const size_t taillen = std::min(len, cap - rp);
         std::copy_n(&src[rp], taillen, dst);
         std::copy_n(src, len - taillen, dst + taillen);
     }
 
-    if (advp && len)
+    if (advp)
         atomic_store_maybe(rp_, (rp + len < cap) ? (rp + len) : (rp + len - cap), std::memory_order_relaxed);
     return true;
 }
@@ -122,6 +125,9 @@ bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 template <bool Atomic>
 bool Ring_Buffer_Ex<Atomic>::putbytes_(const void *data, size_t len)
 {
+    if (len == 0)
+        return true;
+
     if (size_free() < len)
         return false;
 
