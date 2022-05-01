@@ -14,6 +14,35 @@
 #    define if_constexpr if
 #endif
 
+namespace {
+
+template <class T>
+inline T atomic_load_maybe(const std::atomic<T> &src, std::memory_order order)
+{
+    return src.load(order);
+}
+
+template <class T>
+inline T atomic_load_maybe(const T &src, std::memory_order)
+{
+    return src;
+}
+
+template <class T>
+inline void atomic_store_maybe(std::atomic<T> &dst, const T &value, std::memory_order order)
+{
+    return dst.store(value, order);
+}
+
+template <class T>
+inline void atomic_store_maybe(T &dst, const T &value, std::memory_order)
+{
+    dst = value;
+}
+
+} // namespace
+
+//------------------------------------------------------------------------------
 template <bool Atomic>
 Ring_Buffer_Ex<Atomic>::Ring_Buffer_Ex(size_t capacity)
     : cap_(capacity + 1),
@@ -29,7 +58,9 @@ Ring_Buffer_Ex<Atomic>::~Ring_Buffer_Ex()
 template <bool Atomic>
 size_t Ring_Buffer_Ex<Atomic>::size_used() const
 {
-    const size_t rp = rp_, wp = wp_, cap = cap_;
+    const size_t rp = atomic_load_maybe(rp_, std::memory_order_relaxed);
+    const size_t wp = atomic_load_maybe(wp_, std::memory_order_relaxed);
+    const size_t cap = cap_;
     return wp + ((wp < rp) ? cap : 0) - rp;
 }
 
@@ -42,7 +73,9 @@ bool Ring_Buffer_Ex<Atomic>::discard(size_t len)
 template <bool Atomic>
 size_t Ring_Buffer_Ex<Atomic>::size_free() const
 {
-    const size_t rp = rp_, wp = wp_, cap = cap_;
+    const size_t rp = atomic_load_maybe(rp_, std::memory_order_relaxed);
+    const size_t wp = atomic_load_maybe(wp_, std::memory_order_relaxed);
+    const size_t cap = cap_;
     return rp + ((rp <= wp) ? cap : 0) - wp - 1;
 }
 
@@ -62,23 +95,27 @@ bool Ring_Buffer_Ex<Atomic>::peekbytes_(void *data, size_t len) const
 template <bool Atomic>
 bool Ring_Buffer_Ex<Atomic>::getbytes_ex_(void *data, size_t len, bool advp)
 {
-    if (size_used() < len)
+    const size_t rp = atomic_load_maybe(rp_, std::memory_order_relaxed);
+    const size_t wp = atomic_load_maybe(wp_, (data && len) ? std::memory_order_acquire : std::memory_order_relaxed);
+    const size_t cap = cap_;
+
+    // same as `size_used()` except `wp` memory order to synchronize data
+    size_t used = wp + ((wp < rp) ? cap : 0) - rp;
+
+    if (used < len)
         return false;
 
-    const size_t rp = rp_, cap = cap_;
     const uint8_t *src = rbdata_.get();
     uint8_t *dst = (uint8_t *)data;
 
-    if (data) {
+    if (data && len) {
         const size_t taillen = std::min(len, cap - rp);
-        if_constexpr (Atomic)
-            std::atomic_thread_fence(std::memory_order_acquire);
         std::copy_n(&src[rp], taillen, dst);
         std::copy_n(src, len - taillen, dst + taillen);
     }
 
-    if (advp)
-        rp_ = (rp + len < cap) ? (rp + len) : (rp + len - cap);
+    if (advp && len)
+        atomic_store_maybe(rp_, (rp + len < cap) ? (rp + len) : (rp + len - cap), std::memory_order_relaxed);
     return true;
 }
 
@@ -88,17 +125,16 @@ bool Ring_Buffer_Ex<Atomic>::putbytes_(const void *data, size_t len)
     if (size_free() < len)
         return false;
 
-    const size_t wp = wp_, cap = cap_;
+    const size_t wp = atomic_load_maybe(wp_, std::memory_order_relaxed);
+    const size_t cap = cap_;
     const uint8_t *src = (const uint8_t *)data;
     uint8_t *dst = rbdata_.get();
 
     const size_t taillen = std::min(len, cap - wp);
     std::copy_n(src, taillen, &dst[wp]);
     std::copy_n(src + taillen, len - taillen, dst);
-    if_constexpr (Atomic)
-        std::atomic_thread_fence(std::memory_order_release);
 
-    wp_ = (wp + len < cap) ? (wp + len) : (wp + len - cap);
+    atomic_store_maybe(wp_, (wp + len < cap) ? (wp + len) : (wp + len - cap), std::memory_order_release);
     return true;
 }
 
