@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.5)
 project(ring_buffer LANGUAGES CXX)
 
 set(RING_BUFFER_CXX_STANDARD "" CACHE STRING "the C++ standard version to use; if false, autodetect.")
+option(RING_BUFFER_TESTS "Build tests" OFF)
 
 if(RING_BUFFER_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD "${RING_BUFFER_CXX_STANDARD}")
@@ -22,7 +23,9 @@ find_package(Threads REQUIRED)
 
 add_library(ring_buffer STATIC "sources/ring_buffer.cc")
 target_include_directories(ring_buffer PUBLIC "include")
-target_link_libraries(ring_buffer PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(ring_buffer PUBLIC Threads::Threads)
 
-add_executable(ring_buffer_test EXCLUDE_FROM_ALL "tests/main.cc")
-target_link_libraries(ring_buffer_test PRIVATE ring_buffer)
+if(RING_BUFFER_TESTS)
+  add_executable(ring_buffer_test "tests/main.cc")
+  target_link_libraries(ring_buffer_test PRIVATE ring_buffer)
+endif()
