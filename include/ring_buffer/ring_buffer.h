@@ -62,6 +62,8 @@ public:
     size_t size_free() const;
     using Base::put;
 
+    static constexpr bool can_extend() { return false; }
+
 private:
     size_t cap_{0};
     std::conditional_t<Atomic, std::atomic<size_t>, size_t> rp_{0}, wp_{0};
@@ -94,6 +96,8 @@ public:
     // write operations
     size_t size_free() const;
     using Base::put;
+
+    static constexpr bool can_extend() { return true; }
 
 private:
     Ring_Buffer_Ex<false> rb_;

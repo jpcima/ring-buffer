@@ -28,4 +28,6 @@ target_link_libraries(ring_buffer PUBLIC Threads::Threads)
 if(RING_BUFFER_TESTS)
   add_executable(ring_buffer_test "tests/main.cc")
   target_link_libraries(ring_buffer_test PRIVATE ring_buffer)
+  set_target_properties(ring_buffer_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<0:>")
 endif()

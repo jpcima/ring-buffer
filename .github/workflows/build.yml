@@ -1,0 +1,115 @@
+name: build
+
+on:
+  push:
+    branches:
+      - '*'
+    tags:
+      - '[0-9]*'
+      - 'v[0-9]*'
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - name: win32
+            display-name: Windows 32-bit
+            runs-on: windows-2019
+            platform: x86
+            release-arch: Win32
+            cmake-generator: Visual Studio 16 2019
+            os-type: Windows
+            shell: pwsh
+          - name: win64
+            display-name: Windows 64-bit
+            runs-on: windows-2019
+            platform: x64
+            release-arch: x64
+            cmake-generator: Visual Studio 16 2019
+            os-type: Windows
+            shell: pwsh
+          - name: linux64
+            display-name: Linux 64-bit
+            runs-on: ubuntu-20.04
+            platform: x86_64
+            release-arch: Linux64
+            os-type: Linux
+            shell: bash
+          - name: macos
+            display-name: macOS
+            runs-on: macos-11
+            os-type: macOS
+            shell: bash
+          - name: mingw32
+            display-name: MSYS MinGW 32-bit
+            runs-on: windows-2019
+            platform: i686
+            msystem: MINGW32
+            os-type: MinGW
+            shell: msys2 {0}
+          - name: mingw64
+            display-name: MSYS MinGW 64-bit
+            runs-on: windows-2019
+            platform: x86_64
+            msystem: MINGW64
+            os-type: MinGW
+            shell: msys2 {0}
+      fail-fast: false
+    name: Compile for ${{matrix.display-name}}
+    runs-on: ${{matrix.runs-on}}
+    defaults:
+      run:
+        shell: ${{matrix.shell}}
+    env:
+      name: ${{matrix.name}}
+      display_name: ${{matrix.display-name}}
+      platform: ${{matrix.platform}}
+      release_arch: ${{matrix.release-arch}}
+      cmake_generator: ${{matrix.cmake-generator}}
+      build_type: Release
+      num_jobs: 2
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        if: ${{matrix.os-type == 'MinGW'}}
+        with:
+          msystem: ${{matrix.msystem}}
+          update: true
+          install: >-
+            git
+            mingw-w64-${{matrix.platform}}-toolchain
+            mingw-w64-${{matrix.platform}}-cmake
+            mingw-w64-${{matrix.platform}}-ninja
+      - name: Create Build Directory
+        working-directory: ${{runner.workspace}}
+        run: cmake -E make_directory build
+      - name: Configure CMake (Windows)
+        if: ${{matrix.os-type == 'Windows'}}
+        working-directory: ${{runner.workspace}}/build
+        run: cmake "${Env:GITHUB_WORKSPACE}" -G"${Env:cmake_generator}" -A"${Env:release_arch}" -DCMAKE_BUILD_TYPE="${Env:build_type}" -DRING_BUFFER_TESTS=ON
+      - name: Configure CMake (Linux and macOS)
+        if: ${{matrix.os-type == 'Linux' || matrix.os-type == 'macOS'}}
+        working-directory: ${{runner.workspace}}/build
+        run: cmake "${GITHUB_WORKSPACE}" -DCMAKE_BUILD_TYPE="${build_type}" -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DRING_BUFFER_TESTS=ON
+      - name: Configure CMake (MinGW)
+        if: ${{matrix.os-type == 'MinGW'}}
+        working-directory: ${{runner.workspace}}/build
+        run: cmake "${GITHUB_WORKSPACE}" -DCMAKE_BUILD_TYPE="${build_type}" -DRING_BUFFER_TESTS=ON
+      - name: Build all (Windows)
+        if: ${{matrix.os-type == 'Windows'}}
+        working-directory: ${{runner.workspace}}/build
+        run: cmake --build . --config "${Env:build_type}" -j "${Env:num_jobs}"
+      - name: Build all (Linux, macOS and MinGW)
+        if: ${{matrix.os-type == 'Linux' || matrix.os-type == 'macOS' || matrix.os-type == 'MinGW'}}
+        working-directory: ${{runner.workspace}}/build
+        run: cmake --build . --config "${build_type}" -j "${num_jobs}"
+      - name: Test
+        working-directory: ${{runner.workspace}}/build
+        run: ./ring_buffer_test
