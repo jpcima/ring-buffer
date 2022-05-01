@@ -5,6 +5,7 @@
 
 #include "ring_buffer/ring_buffer.h"
 #include <algorithm>
+#include <mutex>
 #include <cassert>
 
 #if defined(__cpp_if_constexpr)
