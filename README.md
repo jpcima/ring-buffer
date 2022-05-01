@@ -1,4 +1,7 @@
 # ring-buffer
+
+![Status](https://github.com/jpcima/ring-buffer/actions/workflows/main.yml/badge.svg)
+
 This package provides ring buffer classes for use with C++17.
 
 C++17 features are used if available, and backward compatibility is implemented up to C++14.
