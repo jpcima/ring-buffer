@@ -202,6 +202,7 @@ bool Soft_Ring_Buffer_Ex<Mutex>::putbytes_(const void *data, size_t len)
         good = rb_.putbytes_(data, len);
     }
     assert(good);
+    (void)good;
     return true;
 }
 
